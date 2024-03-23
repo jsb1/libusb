@@ -26,7 +26,7 @@
  * This page details how to use the libusb hotplug interface, where available.
  *
  * Be mindful that not all platforms currently implement hotplug notification and
- * that you should first call on \ref libusb_has_capability() with parameter
+ * that you should first call on \ref libusb_has_capability_context() with parameter
  * \ref LIBUSB_CAP_HAS_HOTPLUG to confirm that hotplug support is available.
  *
  * \page libusb_hotplug Device hotplug event notification
@@ -35,7 +35,7 @@
  *
  * Version 1.0.16, \ref LIBUSBX_API_VERSION >= 0x01000102, has added support
  * for hotplug events on <b>some</b> platforms (you should test if your platform
- * supports hotplug notification by calling \ref libusb_has_capability() with
+ * supports hotplug notification by calling \ref libusb_has_capability_context() with
  * parameter \ref LIBUSB_CAP_HAS_HOTPLUG).
  *
  * This interface allows you to request notification for the arrival and departure
@@ -152,13 +152,34 @@ int main (void) {
 void usbi_hotplug_init(struct libusb_context *ctx)
 {
 	/* check for hotplug support */
-	if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG))
+	if (!libusb_has_capability_context(ctx, LIBUSB_CAP_HAS_HOTPLUG))
 		return;
 
 	usbi_mutex_init(&ctx->hotplug_cbs_lock);
 	list_init(&ctx->hotplug_cbs);
 	ctx->next_hotplug_cb_handle = 1;
 	usbi_atomic_store(&ctx->hotplug_ready, 1);
+}
+
+static void usbi_recursively_remove_parents(struct libusb_device *dev, struct libusb_device *next_dev)
+{
+	if (dev && dev->parent_dev) {
+		if (usbi_atomic_load(&dev->parent_dev->refcnt) == 1) {
+			/* The parent was processed before this device in the list and
+			 * therefore has its ref count already decremented for its own ref.
+			 * The only remaining counted ref comes from its remaining single child.
+			 * It will thus be released when its child will be released. So we
+			 * can remove it from the list. This is safe as parent_dev cannot be
+			 * equal to next_dev given that we know at this point that it was
+			 * previously seen in the list. */
+			assert (dev->parent_dev != next_dev);
+			if (dev->parent_dev->list.next && dev->parent_dev->list.prev) {
+				list_del(&dev->parent_dev->list);
+			}
+		}
+
+		usbi_recursively_remove_parents(dev->parent_dev, next_dev);
+	}
 }
 
 void usbi_hotplug_exit(struct libusb_context *ctx)
@@ -168,7 +189,7 @@ void usbi_hotplug_exit(struct libusb_context *ctx)
 	struct libusb_device *dev, *next_dev;
 
 	/* check for hotplug support */
-	if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG))
+	if (!libusb_has_capability_context(ctx, LIBUSB_CAP_HAS_HOTPLUG))
 		return;
 
 	if (!usbi_atomic_load(&ctx->hotplug_ready))
@@ -193,7 +214,8 @@ void usbi_hotplug_exit(struct libusb_context *ctx)
 		free(msg);
 	}
 
-	/* free all discovered devices. due to parent references loop until no devices are freed. */
+	usbi_mutex_lock(&ctx->usb_devs_lock); /* hotplug thread might still be processing an already triggered event, possibly accessing this list as well */
+	/* free all discovered devices */
 	for_each_device_safe(ctx, dev, next_dev) {
 		/* remove the device from the usb_devs list only if there are no
 		 * references held, otherwise leave it on the list so that a
@@ -201,15 +223,12 @@ void usbi_hotplug_exit(struct libusb_context *ctx)
 		if (usbi_atomic_load(&dev->refcnt) == 1) {
 			list_del(&dev->list);
 		}
-		if (dev->parent_dev && usbi_atomic_load(&dev->parent_dev->refcnt) == 1) {
-			/* the parent was before this device in the list and will be released.
-			   remove it from the list. this is safe as parent_dev can not be
-			   equal to next_dev. */
-			assert (dev->parent_dev != next_dev);
-			list_del(&dev->parent_dev->list);
-		}
+
+		usbi_recursively_remove_parents(dev, next_dev);
+
 		libusb_unref_device(dev);
 	}
+	usbi_mutex_unlock(&ctx->usb_devs_lock);
 
 	usbi_mutex_destroy(&ctx->hotplug_cbs_lock);
 }
@@ -339,7 +358,7 @@ int API_EXPORTED libusb_hotplug_register_callback(libusb_context *ctx,
 	}
 
 	/* check for hotplug support */
-	if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG))
+	if (!libusb_has_capability_context(ctx, LIBUSB_CAP_HAS_HOTPLUG))
 		return LIBUSB_ERROR_NOT_SUPPORTED;
 
 	ctx = usbi_get_context(ctx);
@@ -412,7 +431,7 @@ void API_EXPORTED libusb_hotplug_deregister_callback(libusb_context *ctx,
 	int deregistered = 0;
 
 	/* check for hotplug support */
-	if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG))
+	if (!libusb_has_capability_context(ctx, LIBUSB_CAP_HAS_HOTPLUG))
 		return;
 
 	usbi_dbg(ctx, "deregister hotplug cb %d", callback_handle);
@@ -450,7 +469,7 @@ void * LIBUSB_CALL libusb_hotplug_get_user_data(libusb_context *ctx,
 	void *user_data = NULL;
 
 	/* check for hotplug support */
-	if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG))
+	if (!libusb_has_capability_context(ctx, LIBUSB_CAP_HAS_HOTPLUG))
 		return NULL;
 
 	usbi_dbg(ctx, "get hotplug cb %d user data", callback_handle);

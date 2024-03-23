@@ -1434,7 +1434,11 @@ enum libusb_capability {
 
 	/** The library supports detaching of the default USB driver, using
 	 * \ref libusb_detach_kernel_driver(), if one is set by the OS kernel */
-	LIBUSB_CAP_SUPPORTS_DETACH_KERNEL_DRIVER = 0x0101U
+	LIBUSB_CAP_SUPPORTS_DETACH_KERNEL_DRIVER = 0x0101U,
+
+	/** The library attaching remote devices via uspip.
+	 */
+	LIBUSB_CAP_SUPPORTS_USBIP = 0x01000U,
 };
 
 /** \ingroup libusb_lib
@@ -1542,7 +1546,12 @@ enum libusb_option {
 	 */
 	LIBUSB_OPTION_LOG_CB = 3,
 
-	LIBUSB_OPTION_MAX = 4
+	/* Address And Port for USBIP Access
+	 *
+	 */
+	LIBUSB_OPTION_USBIP_ADDRESS = 4,
+
+	LIBUSB_OPTION_MAX = 5
 };
 
 /** \ingroup libusb_lib
@@ -1570,6 +1579,8 @@ struct libusb_init_option {
   union {
     int ival;
     libusb_log_cb log_cbval;
+    /** usbip settings */
+    char *ip_address;
   } value;
 };
 
@@ -1581,6 +1592,8 @@ void LIBUSB_CALL libusb_set_debug(libusb_context *ctx, int level);
 void LIBUSB_CALL libusb_set_log_cb(libusb_context *ctx, libusb_log_cb cb, int mode);
 const struct libusb_version * LIBUSB_CALL libusb_get_version(void);
 int LIBUSB_CALL libusb_has_capability(uint32_t capability);
+int LIBUSB_CALL libusb_has_capability_context(struct libusb_context *ctx, uint32_t capability);
+
 const char * LIBUSB_CALL libusb_error_name(int errcode);
 int LIBUSB_CALL libusb_setlocale(const char *locale);
 const char * LIBUSB_CALL libusb_strerror(int errcode);
@@ -1771,6 +1784,7 @@ static inline void libusb_fill_control_setup(unsigned char *buffer,
 }
 
 struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer(int iso_packets);
+struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer_context(struct libusb_context *ctx, int iso_packets);
 int LIBUSB_CALL libusb_submit_transfer(struct libusb_transfer *transfer);
 int LIBUSB_CALL libusb_cancel_transfer(struct libusb_transfer *transfer);
 void LIBUSB_CALL libusb_free_transfer(struct libusb_transfer *transfer);

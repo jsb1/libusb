@@ -82,3 +82,8 @@ xcuserdata
 build/
 tags
 cscope.out
+/.cproject
+/.project
+/tmp.txt
+/.autotools
+/nohup.out

@@ -710,7 +710,7 @@ struct discovered_devs *discovered_devs_append(
 struct libusb_device *usbi_alloc_device(struct libusb_context *ctx,
 	unsigned long session_id)
 {
-	size_t priv_size = usbi_backend.device_priv_size;
+	size_t priv_size = CTX_BACKEND(ctx).device_priv_size;
 	struct libusb_device *dev = calloc(1, PTR_ALIGN(sizeof(*dev)) + priv_size);
 
 	if (!dev)
@@ -722,7 +722,7 @@ struct libusb_device *usbi_alloc_device(struct libusb_context *ctx,
 	dev->session_data = session_id;
 	dev->speed = LIBUSB_SPEED_UNKNOWN;
 
-	if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG))
+	if (!libusb_has_capability_context(ctx, LIBUSB_CAP_HAS_HOTPLUG))
 		usbi_connect_device(dev);
 
 	return dev;
@@ -834,12 +834,12 @@ ssize_t API_EXPORTED libusb_get_device_list(libusb_context *ctx,
 
 	ctx = usbi_get_context(ctx);
 
-	if (libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG)) {
+	if (libusb_has_capability_context(ctx, LIBUSB_CAP_HAS_HOTPLUG)) {
 		/* backend provides hotplug support */
 		struct libusb_device *dev;
 
-		if (usbi_backend.hotplug_poll)
-			usbi_backend.hotplug_poll();
+		if (CTX_BACKEND(ctx).hotplug_poll)
+			CTX_BACKEND(ctx).hotplug_poll();
 
 		usbi_mutex_lock(&ctx->usb_devs_lock);
 		for_each_device(ctx, dev) {
@@ -853,7 +853,7 @@ ssize_t API_EXPORTED libusb_get_device_list(libusb_context *ctx,
 		usbi_mutex_unlock(&ctx->usb_devs_lock);
 	} else {
 		/* backend does not provide hotplug support */
-		r = usbi_backend.get_device_list(ctx, &discdevs);
+		r = CTX_BACKEND(ctx).get_device_list(ctx, &discdevs);
 	}
 
 	if (r < 0) {
@@ -1300,10 +1300,10 @@ void API_EXPORTED libusb_unref_device(libusb_device *dev)
 
 		libusb_unref_device(dev->parent_dev);
 
-		if (usbi_backend.destroy_device)
-			usbi_backend.destroy_device(dev);
+		if (CTX_BACKEND(DEVICE_CTX(dev)).destroy_device)
+			CTX_BACKEND(DEVICE_CTX(dev)).destroy_device(dev);
 
-		if (!libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG)) {
+		if (!libusb_has_capability_context(DEVICE_CTX(dev), LIBUSB_CAP_HAS_HOTPLUG)) {
 			/* backend does not support hotplug */
 			usbi_disconnect_device(dev);
 		}
@@ -1351,14 +1351,14 @@ int API_EXPORTED libusb_wrap_sys_device(libusb_context *ctx, intptr_t sys_dev,
 	libusb_device_handle **dev_handle)
 {
 	struct libusb_device_handle *_dev_handle;
-	size_t priv_size = usbi_backend.device_handle_priv_size;
+	size_t priv_size = CTX_BACKEND(ctx).device_handle_priv_size;
 	int r;
 
 	usbi_dbg(ctx, "wrap_sys_device 0x%" PRIxPTR, (uintptr_t)sys_dev);
 
 	ctx = usbi_get_context(ctx);
 
-	if (!usbi_backend.wrap_sys_device)
+	if (!CTX_BACKEND(ctx).wrap_sys_device)
 		return LIBUSB_ERROR_NOT_SUPPORTED;
 
 	_dev_handle = calloc(1, PTR_ALIGN(sizeof(*_dev_handle)) + priv_size);
@@ -1367,7 +1367,7 @@ int API_EXPORTED libusb_wrap_sys_device(libusb_context *ctx, intptr_t sys_dev,
 
 	usbi_mutex_init(&_dev_handle->lock);
 
-	r = usbi_backend.wrap_sys_device(ctx, _dev_handle, sys_dev);
+	r = CTX_BACKEND(ctx).wrap_sys_device(ctx, _dev_handle, sys_dev);
 	if (r < 0) {
 		usbi_dbg(ctx, "wrap_sys_device 0x%" PRIxPTR " returns %d", (uintptr_t)sys_dev, r);
 		usbi_mutex_destroy(&_dev_handle->lock);
@@ -1407,7 +1407,7 @@ int API_EXPORTED libusb_open(libusb_device *dev,
 {
 	struct libusb_context *ctx = DEVICE_CTX(dev);
 	struct libusb_device_handle *_dev_handle;
-	size_t priv_size = usbi_backend.device_handle_priv_size;
+	size_t priv_size = CTX_BACKEND(ctx).device_handle_priv_size;
 	int r;
 
 	usbi_dbg(DEVICE_CTX(dev), "open %d.%d", dev->bus_number, dev->device_address);
@@ -1423,7 +1423,7 @@ int API_EXPORTED libusb_open(libusb_device *dev,
 
 	_dev_handle->dev = libusb_ref_device(dev);
 
-	r = usbi_backend.open(_dev_handle);
+	r = CTX_BACKEND(ctx).open(_dev_handle);
 	if (r < 0) {
 		usbi_dbg(DEVICE_CTX(dev), "open %d.%d returns %d", dev->bus_number, dev->device_address, r);
 		libusb_unref_device(dev);
@@ -1542,7 +1542,7 @@ static void do_close(struct libusb_context *ctx,
 	list_del(&dev_handle->list);
 	usbi_mutex_unlock(&ctx->open_devs_lock);
 
-	usbi_backend.close(dev_handle);
+	CTX_BACKEND(ctx).close(dev_handle);
 	libusb_unref_device(dev_handle->dev);
 	usbi_mutex_destroy(&dev_handle->lock);
 	free(dev_handle);
@@ -1654,8 +1654,8 @@ int API_EXPORTED libusb_get_configuration(libusb_device_handle *dev_handle,
 	struct libusb_context *ctx = HANDLE_CTX(dev_handle);
 
 	usbi_dbg(ctx, " ");
-	if (usbi_backend.get_configuration)
-		r = usbi_backend.get_configuration(dev_handle, &tmp);
+	if (CTX_BACKEND(ctx).get_configuration)
+		r = CTX_BACKEND(ctx).get_configuration(dev_handle, &tmp);
 
 	if (r == LIBUSB_ERROR_NOT_SUPPORTED) {
 		usbi_dbg(ctx, "falling back to control message");
@@ -1736,10 +1736,11 @@ int API_EXPORTED libusb_get_configuration(libusb_device_handle *dev_handle,
 int API_EXPORTED libusb_set_configuration(libusb_device_handle *dev_handle,
 	int configuration)
 {
+
 	usbi_dbg(HANDLE_CTX(dev_handle), "configuration %d", configuration);
 	if (configuration < -1 || configuration > (int)UINT8_MAX)
 		return LIBUSB_ERROR_INVALID_PARAM;
-	return usbi_backend.set_configuration(dev_handle, configuration);
+	return CTX_BACKEND(DEVICE_CTX(dev_handle->dev)).set_configuration(dev_handle, configuration);
 }
 
 /** \ingroup libusb_dev
@@ -1786,7 +1787,7 @@ int API_EXPORTED libusb_claim_interface(libusb_device_handle *dev_handle,
 	if (dev_handle->claimed_interfaces & (1U << interface_number))
 		goto out;
 
-	r = usbi_backend.claim_interface(dev_handle, (uint8_t)interface_number);
+	r = HANDLE_BACKEND(dev_handle).claim_interface(dev_handle, (uint8_t)interface_number);
 	if (r == 0)
 		dev_handle->claimed_interfaces |= 1U << interface_number;
 
@@ -1829,7 +1830,7 @@ int API_EXPORTED libusb_release_interface(libusb_device_handle *dev_handle,
 		goto out;
 	}
 
-	r = usbi_backend.release_interface(dev_handle, (uint8_t)interface_number);
+	r = HANDLE_BACKEND(dev_handle).release_interface(dev_handle, (uint8_t)interface_number);
 	if (r == 0)
 		dev_handle->claimed_interfaces &= ~(1U << interface_number);
 
@@ -1880,7 +1881,7 @@ int API_EXPORTED libusb_set_interface_alt_setting(libusb_device_handle *dev_hand
 	}
 	usbi_mutex_unlock(&dev_handle->lock);
 
-	return usbi_backend.set_interface_altsetting(dev_handle,
+	return HANDLE_BACKEND(dev_handle).set_interface_altsetting(dev_handle,
 		(uint8_t)interface_number, (uint8_t)alternate_setting);
 }
 
@@ -1907,7 +1908,7 @@ int API_EXPORTED libusb_clear_halt(libusb_device_handle *dev_handle,
 	if (!usbi_atomic_load(&dev_handle->dev->attached))
 		return LIBUSB_ERROR_NO_DEVICE;
 
-	return usbi_backend.clear_halt(dev_handle, endpoint);
+	return HANDLE_BACKEND(dev_handle).clear_halt(dev_handle, endpoint);
 }
 
 /** \ingroup libusb_dev
@@ -1935,8 +1936,8 @@ int API_EXPORTED libusb_reset_device(libusb_device_handle *dev_handle)
 	if (!usbi_atomic_load(&dev_handle->dev->attached))
 		return LIBUSB_ERROR_NO_DEVICE;
 
-	if (usbi_backend.reset_device)
-		return usbi_backend.reset_device(dev_handle);
+	if (HANDLE_BACKEND(dev_handle).reset_device)
+		return HANDLE_BACKEND(dev_handle).reset_device(dev_handle);
 	else
 		return LIBUSB_ERROR_NOT_SUPPORTED;
 }
@@ -1973,8 +1974,8 @@ int API_EXPORTED libusb_alloc_streams(libusb_device_handle *dev_handle,
 	if (!usbi_atomic_load(&dev_handle->dev->attached))
 		return LIBUSB_ERROR_NO_DEVICE;
 
-	if (usbi_backend.alloc_streams)
-		return usbi_backend.alloc_streams(dev_handle, num_streams, endpoints,
+	if (HANDLE_BACKEND(dev_handle).alloc_streams)
+		return HANDLE_BACKEND(dev_handle).alloc_streams(dev_handle, num_streams, endpoints,
 						   num_endpoints);
 	else
 		return LIBUSB_ERROR_NOT_SUPPORTED;
@@ -2003,8 +2004,8 @@ int API_EXPORTED libusb_free_streams(libusb_device_handle *dev_handle,
 	if (!usbi_atomic_load(&dev_handle->dev->attached))
 		return LIBUSB_ERROR_NO_DEVICE;
 
-	if (usbi_backend.free_streams)
-		return usbi_backend.free_streams(dev_handle, endpoints,
+	if (HANDLE_BACKEND(dev_handle).free_streams)
+		return HANDLE_BACKEND(dev_handle).free_streams(dev_handle, endpoints,
 						  num_endpoints);
 	else
 		return LIBUSB_ERROR_NOT_SUPPORTED;
@@ -2041,8 +2042,8 @@ unsigned char * LIBUSB_CALL libusb_dev_mem_alloc(libusb_device_handle *dev_handl
 	if (!usbi_atomic_load(&dev_handle->dev->attached))
 		return NULL;
 
-	if (usbi_backend.dev_mem_alloc)
-		return usbi_backend.dev_mem_alloc(dev_handle, length);
+	if (HANDLE_BACKEND(dev_handle).dev_mem_alloc)
+		return HANDLE_BACKEND(dev_handle).dev_mem_alloc(dev_handle, length);
 	else
 		return NULL;
 }
@@ -2058,8 +2059,8 @@ unsigned char * LIBUSB_CALL libusb_dev_mem_alloc(libusb_device_handle *dev_handl
 int API_EXPORTED libusb_dev_mem_free(libusb_device_handle *dev_handle,
 	unsigned char *buffer, size_t length)
 {
-	if (usbi_backend.dev_mem_free)
-		return usbi_backend.dev_mem_free(dev_handle, buffer, length);
+	if (HANDLE_BACKEND(dev_handle).dev_mem_free)
+		return HANDLE_BACKEND(dev_handle).dev_mem_free(dev_handle, buffer, length);
 	else
 		return LIBUSB_ERROR_NOT_SUPPORTED;
 }
@@ -2092,8 +2093,8 @@ int API_EXPORTED libusb_kernel_driver_active(libusb_device_handle *dev_handle,
 	if (!usbi_atomic_load(&dev_handle->dev->attached))
 		return LIBUSB_ERROR_NO_DEVICE;
 
-	if (usbi_backend.kernel_driver_active)
-		return usbi_backend.kernel_driver_active(dev_handle, (uint8_t)interface_number);
+	if (HANDLE_BACKEND(dev_handle).kernel_driver_active)
+		return HANDLE_BACKEND(dev_handle).kernel_driver_active(dev_handle, (uint8_t)interface_number);
 	else
 		return LIBUSB_ERROR_NOT_SUPPORTED;
 }
@@ -2130,8 +2131,8 @@ int API_EXPORTED libusb_detach_kernel_driver(libusb_device_handle *dev_handle,
 	if (!usbi_atomic_load(&dev_handle->dev->attached))
 		return LIBUSB_ERROR_NO_DEVICE;
 
-	if (usbi_backend.detach_kernel_driver)
-		return usbi_backend.detach_kernel_driver(dev_handle, (uint8_t)interface_number);
+	if (HANDLE_BACKEND(dev_handle).detach_kernel_driver)
+		return HANDLE_BACKEND(dev_handle).detach_kernel_driver(dev_handle, (uint8_t)interface_number);
 	else
 		return LIBUSB_ERROR_NOT_SUPPORTED;
 }
@@ -2166,8 +2167,8 @@ int API_EXPORTED libusb_attach_kernel_driver(libusb_device_handle *dev_handle,
 	if (!usbi_atomic_load(&dev_handle->dev->attached))
 		return LIBUSB_ERROR_NO_DEVICE;
 
-	if (usbi_backend.attach_kernel_driver)
-		return usbi_backend.attach_kernel_driver(dev_handle, (uint8_t)interface_number);
+	if (HANDLE_BACKEND(dev_handle).attach_kernel_driver)
+		return HANDLE_BACKEND(dev_handle).attach_kernel_driver(dev_handle, (uint8_t)interface_number);
 	else
 		return LIBUSB_ERROR_NOT_SUPPORTED;
 }
@@ -2197,7 +2198,7 @@ int API_EXPORTED libusb_attach_kernel_driver(libusb_device_handle *dev_handle,
 int API_EXPORTED libusb_set_auto_detach_kernel_driver(
 	libusb_device_handle *dev_handle, int enable)
 {
-	if (!(usbi_backend.caps & USBI_CAP_SUPPORTS_DETACH_KERNEL_DRIVER))
+	if (!(HANDLE_BACKEND(dev_handle).caps & USBI_CAP_SUPPORTS_DETACH_KERNEL_DRIVER))
 		return LIBUSB_ERROR_NOT_SUPPORTED;
 
 	dev_handle->auto_detach_kernel_driver = enable;
@@ -2348,10 +2349,11 @@ int API_EXPORTEDV libusb_set_option(libusb_context *ctx,
 			break;
 
 			/* Handle all backend-specific options here */
+		case LIBUSB_OPTION_USBIP_ADDRESS:
 		case LIBUSB_OPTION_USE_USBDK:
 		case LIBUSB_OPTION_NO_DEVICE_DISCOVERY:
-			if (usbi_backend.set_option) {
-				r = usbi_backend.set_option(ctx, option, ap);
+			if (CTX_BACKEND(ctx).set_option) {
+				r = CTX_BACKEND(ctx).set_option(ctx, option, ap);
 				break;
 			}
 
@@ -2423,9 +2425,35 @@ int API_EXPORTED libusb_init(libusb_context **ctx)
  */
 int API_EXPORTED libusb_init_context(libusb_context **ctx, const struct libusb_init_option options[], int num_options)
 {
-	size_t priv_size = usbi_backend.context_priv_size;
 	struct libusb_context *_ctx;
 	int r;
+	const struct usbi_os_backend *use_backend;
+	char *env_address = NULL;
+
+#ifdef ENABLE_USBIP
+	int is_usbip=0;
+
+	for(int i=0; i<num_options; i++)
+		if(options[i].option == LIBUSB_OPTION_USBIP_ADDRESS) {
+			is_usbip = 1;
+			break;
+		}
+	if(!is_usbip) {
+		env_address = getenv("LIBUSB_USBIP_ADDRESS");
+		if(env_address != NULL) {
+			is_usbip = 1;
+		}
+	}
+
+	if(is_usbip) {
+		use_backend = &usbi_backend;
+		// use_backend = &usbip_usbi_backend;
+	} else {
+		use_backend = &usbi_backend;
+	}
+#else
+	use_backend = &usbi_backend;
+#endif
 
 	usbi_mutex_static_lock(&default_context_lock);
 
@@ -2444,11 +2472,15 @@ int API_EXPORTED libusb_init_context(libusb_context **ctx, const struct libusb_i
 	}
 	usbi_mutex_static_unlock(&active_contexts_lock);
 
-	_ctx = calloc(1, PTR_ALIGN(sizeof(*_ctx)) + priv_size);
+	_ctx = calloc(1, PTR_ALIGN(sizeof(*_ctx)) + use_backend->context_priv_size);
 	if (!_ctx) {
 		usbi_mutex_static_unlock(&default_context_lock);
 		return LIBUSB_ERROR_NO_MEM;
 	}
+
+#ifdef ENABLE_USBIP
+	_ctx->usbi_ctx_backend=use_backend;
+#endif
 
 #if defined(ENABLE_LOGGING) && !defined(ENABLE_DEBUG_LOGGING)
 	_ctx->debug = LIBUSB_LOG_LEVEL_NONE;
@@ -2496,6 +2528,12 @@ int API_EXPORTED libusb_init_context(libusb_context **ctx, const struct libusb_i
 		if (LIBUSB_SUCCESS != r)
 			goto err_free_ctx;
 	}
+	/* apply additional option from environment */
+	if(env_address) {
+		r = libusb_set_option(_ctx, LIBUSB_OPTION_USBIP_ADDRESS, env_address);
+		if (LIBUSB_SUCCESS != r)
+			goto err_free_ctx;
+	}
 
 	/* default context must be initialized before calling usbi_dbg */
 	if (!ctx) {
@@ -2518,8 +2556,8 @@ int API_EXPORTED libusb_init_context(libusb_context **ctx, const struct libusb_i
 	list_add(&_ctx->list, &active_contexts_list);
 	usbi_mutex_static_unlock(&active_contexts_lock);
 
-	if (usbi_backend.init) {
-		r = usbi_backend.init(_ctx);
+	if (use_backend->init) {
+		r = use_backend->init(_ctx);
 		if (r)
 			goto err_io_exit;
 	}
@@ -2610,8 +2648,8 @@ void API_EXPORTED libusb_exit(libusb_context *ctx)
 	/* Exit hotplug before backend dependency */
 	usbi_hotplug_exit(_ctx);
 
-	if (usbi_backend.exit)
-		usbi_backend.exit(_ctx);
+	if (CTX_BACKEND(ctx).exit)
+		CTX_BACKEND(ctx).exit(_ctx);
 
 	if (!ctx)
 		usbi_default_context = NULL;
@@ -2650,15 +2688,32 @@ void API_EXPORTED libusb_exit(libusb_context *ctx)
  */
 int API_EXPORTED libusb_has_capability(uint32_t capability)
 {
+	return libusb_has_capability_context(NULL, capability);
+}
+
+/** \ingroup libusb_misc
+ * Check at runtime if the loaded library has a given capability.
+ * This call should be performed after \ref libusb_init_context(), to ensure the
+ * backend has updated its capability set.
+ *
+ * \param ctx the context to query, mandatory
+ * \param capability the \ref libusb_capability to check for
+ * \returns nonzero if the running library has the capability, 0 otherwise
+ */
+
+int API_EXPORTED libusb_has_capability_context(struct libusb_context *ctx, uint32_t capability)
+{
+	UNUSED(ctx);
+
 	switch (capability) {
 	case LIBUSB_CAP_HAS_CAPABILITY:
 		return 1;
 	case LIBUSB_CAP_HAS_HOTPLUG:
-		return !(usbi_backend.get_device_list);
+		return !(CTX_BACKEND(ctx).get_device_list);
 	case LIBUSB_CAP_HAS_HID_ACCESS:
-		return (usbi_backend.caps & USBI_CAP_HAS_HID_ACCESS);
+		return (CTX_BACKEND(ctx).caps & USBI_CAP_HAS_HID_ACCESS);
 	case LIBUSB_CAP_SUPPORTS_DETACH_KERNEL_DRIVER:
-		return (usbi_backend.caps & USBI_CAP_SUPPORTS_DETACH_KERNEL_DRIVER);
+		return (CTX_BACKEND(ctx).caps & USBI_CAP_SUPPORTS_DETACH_KERNEL_DRIVER);
 	}
 	return 0;
 }

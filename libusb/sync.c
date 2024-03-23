@@ -107,11 +107,12 @@ int API_EXPORTED libusb_control_transfer(libusb_device_handle *dev_handle,
 	unsigned char *buffer;
 	int completed = 0;
 	int r;
+	struct libusb_context *ctx=HANDLE_CTX(dev_handle);
 
-	if (usbi_handling_events(HANDLE_CTX(dev_handle)))
+	if (usbi_handling_events(ctx))
 		return LIBUSB_ERROR_BUSY;
 
-	transfer = libusb_alloc_transfer(0);
+	transfer = libusb_alloc_transfer_context(ctx, 0);
 	if (!transfer)
 		return LIBUSB_ERROR_NO_MEM;
 
@@ -178,11 +179,12 @@ static int do_sync_bulk_transfer(struct libusb_device_handle *dev_handle,
 	struct libusb_transfer *transfer;
 	int completed = 0;
 	int r;
+	struct libusb_context *ctx=HANDLE_CTX(dev_handle);
 
-	if (usbi_handling_events(HANDLE_CTX(dev_handle)))
+	if (usbi_handling_events(ctx))
 		return LIBUSB_ERROR_BUSY;
 
-	transfer = libusb_alloc_transfer(0);
+	transfer = libusb_alloc_transfer_context(ctx, 0);
 	if (!transfer)
 		return LIBUSB_ERROR_NO_MEM;
 
@@ -222,7 +224,7 @@ static int do_sync_bulk_transfer(struct libusb_device_handle *dev_handle,
 		r = LIBUSB_ERROR_IO;
 		break;
 	default:
-		usbi_warn(HANDLE_CTX(dev_handle),
+		usbi_warn(ctx,
 			"unrecognised status code %d", transfer->status);
 		r = LIBUSB_ERROR_OTHER;
 	}

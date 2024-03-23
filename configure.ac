@@ -369,6 +369,12 @@ if test "x$system_log_enabled" != xno; then
 	fi
 fi
 
+dnl usbip build
+AC_ARG_ENABLE([usbip],
+	[AS_HELP_STRING([--enable-usbip], [enable usbip support [default=yes]])],
+	[enable_usbip=$enableval],
+	[enable_usbip=yes])
+
 dnl Examples build
 AC_ARG_ENABLE([examples-build],
 	[AS_HELP_STRING([--enable-examples-build], [build example applications [default=no]])],
@@ -381,6 +387,7 @@ AC_ARG_ENABLE([tests-build],
 	[build_tests=$enableval],
 	[build_tests=no])
 
+AM_CONDITIONAL([ENABLE_USBIP], [test "x$enable_usbip" != xno -a "x$backend" = xlinux])
 AM_CONDITIONAL([BUILD_EXAMPLES], [test "x$build_examples" != xno])
 AM_CONDITIONAL([BUILD_TESTS], [test "x$build_tests" != xno])
 AM_CONDITIONAL([BUILD_UMOCKDEV_TEST], [test "x$ac_have_umockdev" = xyes -a "x$log_enabled" != xno -a "x$debug_log_enabled" != xyes])

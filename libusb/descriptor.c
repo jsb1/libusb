@@ -480,7 +480,7 @@ static int raw_desc_to_config(struct libusb_context *ctx,
 static int get_active_config_descriptor(struct libusb_device *dev,
 	uint8_t *buffer, size_t size)
 {
-	int r = usbi_backend.get_active_config_descriptor(dev, buffer, size);
+	int r = DEVICE_BACKEND(dev).get_active_config_descriptor(dev, buffer, size);
 
 	if (r < 0)
 		return r;
@@ -500,7 +500,7 @@ static int get_active_config_descriptor(struct libusb_device *dev,
 static int get_config_descriptor(struct libusb_device *dev, uint8_t config_idx,
 	uint8_t *buffer, size_t size)
 {
-	int r = usbi_backend.get_config_descriptor(dev, config_idx, buffer, size);
+	int r = DEVICE_BACKEND(dev).get_config_descriptor(dev, config_idx, buffer, size);
 
 	if (r < 0)
 		return r;
@@ -645,10 +645,10 @@ int API_EXPORTED libusb_get_config_descriptor_by_value(libusb_device *dev,
 	uint8_t idx;
 	int r;
 
-	if (usbi_backend.get_config_descriptor_by_value) {
+	if (DEVICE_BACKEND(dev).get_config_descriptor_by_value) {
 		void *buf;
 
-		r = usbi_backend.get_config_descriptor_by_value(dev,
+		r = DEVICE_BACKEND(dev).get_config_descriptor_by_value(dev,
 			bConfigurationValue, &buf);
 		if (r < 0)
 			return r;

@@ -336,12 +336,42 @@ void usbi_log(struct libusb_context *ctx, enum libusb_log_level level,
 #define TRANSFER_CTX(transfer) \
 	(ITRANSFER_CTX(LIBUSB_TRANSFER_TO_USBI_TRANSFER(transfer)))
 
+#ifdef ENABLE_USBIP
+/** As much fallback as possible. API misuse will fall back to default usbi_backend.
+ * That should work except in case of usbip.
+ * Size of striped shared library is increased by 4 kB.
+ * Using CTX_BACKEND_UNSAFE() everywhere
+ * does not increase code size. Needs careful optimization ...
+  */
+#define CTX_BACKEND_SAFE(_ctx_) (usbi_get_context(_ctx_) ? \
+		*usbi_get_context(_ctx_)->usbi_ctx_backend : usbi_backend)
+#define CTX_BACKEND_NEARLY_SAFE(_ctx_) ((_ctx_) ? \
+		*(_ctx_)->usbi_ctx_backend : usbi_backend)
+#define CTX_BACKEND_UNSAFE(_ctx_) (*(_ctx_)->usbi_ctx_backend)
+#define CTX_BACKEND(_ctx_) CTX_BACKEND_SAFE(_ctx_)
+/* a device should have an context */
+#define DEVICE_BACKEND(_dev_) CTX_BACKEND_UNSAFE(DEVICE_CTX(_dev_))
+/* a handle should have an context */
+#define HANDLE_BACKEND(_handle_) CTX_BACKEND_UNSAFE(HANDLE_CTX(_handle_))
+/* a no idea what users are doing when allocating a transfer */
+#define ITRANSFER_BACKEND(_itransfer_) CTX_BACKEND_SAFE(ITRANSFER_CTX(_itransfer_))
+#else
+#define CTX_BACKEND(_ctx_) usbi_backend
+#define DEVICE_BACKEND(_dev_) usbi_backend
+#define HANDLE_BACKEND(_handle_) usbi_backend
+#define ITRANSFER_BACKEND(_itransfer_) usbi_backend
+#endif
+
 #define IS_EPIN(ep)		(0 != ((ep) & LIBUSB_ENDPOINT_IN))
 #define IS_EPOUT(ep)		(!IS_EPIN(ep))
 #define IS_XFERIN(xfer)		(0 != ((xfer)->endpoint & LIBUSB_ENDPOINT_IN))
 #define IS_XFEROUT(xfer)	(!IS_XFERIN(xfer))
 
 struct libusb_context {
+#ifdef ENABLE_USBIP
+	const struct usbi_os_backend *usbi_ctx_backend;
+#endif
+
 #if defined(ENABLE_LOGGING) && !defined(ENABLE_DEBUG_LOGGING)
 	enum libusb_log_level debug;
 	int debug_fixed;
@@ -628,7 +658,7 @@ enum usbi_transfer_timeout_flags {
 #define USBI_TRANSFER_TO_TRANSFER_PRIV(itransfer) \
 	((unsigned char *)			\
 	 ((unsigned char *)(itransfer)	\
-	  - PTR_ALIGN(usbi_backend.transfer_priv_size)))
+	  - PTR_ALIGN(ITRANSFER_BACKEND(itransfer).transfer_priv_size)))
 
 #define USBI_TRANSFER_TO_LIBUSB_TRANSFER(itransfer)	\
 	((struct libusb_transfer *)			\
@@ -1473,6 +1503,9 @@ struct usbi_os_backend {
 };
 
 extern const struct usbi_os_backend usbi_backend;
+#ifdef ENABLE_USBIP
+extern const struct usbi_os_backend usbip_usbi_backend;
+#endif
 
 #define for_each_context(c) \
 	for_each_helper(c, &active_contexts_list, struct libusb_context)

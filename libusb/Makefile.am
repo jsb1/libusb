@@ -10,6 +10,12 @@ POSIX_PLATFORM_SRC = os/events_posix.h os/events_posix.c \
 WINDOWS_PLATFORM_SRC = os/events_windows.h os/events_windows.c \
 		       os/threads_windows.h os/threads_windows.c
 
+if ENABLE_USBIP
+AM_CFLAGS += -DENABLE_USBIP
+#POSIX_PLATFORM_SRC += net/net_connection.h net/posix_net_connection.c \
+#	net/net_usbip.h net/usbip.h net/usbip.c 
+endif
+
 if PLATFORM_POSIX
 PLATFORM_SRC = $(POSIX_PLATFORM_SRC)
 else
@@ -29,6 +35,7 @@ OS_WINDOWS_SRC = libusb-1.0.def libusb-1.0.rc \
 		 os/windows_common.h os/windows_common.c \
 		 os/windows_usbdk.h os/windows_usbdk.c \
 		 os/windows_winusb.h os/windows_winusb.c
+
 
 if OS_DARWIN
 OS_SRC = $(OS_DARWIN_SRC)

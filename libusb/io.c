@@ -1262,6 +1262,14 @@ static void calculate_timeout(struct usbi_transfer *itransfer)
 	}
 }
 
+/** Depends on default context.
+ * Use libusb_alloc_transfer_ctx when working with multiple contexts!
+ **/
+DEFAULT_VISIBILITY
+struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer(int iso_packets) {
+	return libusb_alloc_transfer_context(NULL, iso_packets);
+}
+
 /** \ingroup libusb_asyncio
  * Allocate a libusb transfer with a specified number of isochronous packet
  * descriptors. The returned transfer is pre-initialized for you. When the new
@@ -1286,14 +1294,18 @@ static void calculate_timeout(struct usbi_transfer *itransfer)
  * \returns a newly allocated transfer, or NULL on error
  */
 DEFAULT_VISIBILITY
-struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer(
+struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer_context(
+		struct libusb_context *ctx,
 	int iso_packets)
 {
 	assert(iso_packets >= 0);
 	if (iso_packets < 0)
 		return NULL;
+	ctx = usbi_get_context(ctx);
+	if(ctx==NULL)
+		return NULL;
 
-	size_t priv_size = PTR_ALIGN(usbi_backend.transfer_priv_size);
+	size_t priv_size = PTR_ALIGN(CTX_BACKEND(ctx).transfer_priv_size);
 	size_t usbi_transfer_size = PTR_ALIGN(sizeof(struct usbi_transfer));
 	size_t libusb_transfer_size = PTR_ALIGN(sizeof(struct libusb_transfer));
 	size_t iso_packets_size = sizeof(struct libusb_iso_packet_descriptor) * (size_t)iso_packets;
@@ -1552,7 +1564,7 @@ int API_EXPORTED libusb_submit_transfer(struct libusb_transfer *transfer)
 	 */
 	usbi_mutex_unlock(&ctx->flying_transfers_lock);
 
-	r = usbi_backend.submit_transfer(itransfer);
+	r = CTX_BACKEND(ctx).submit_transfer(itransfer);
 	if (r == LIBUSB_SUCCESS) {
 		itransfer->state_flags |= USBI_TRANSFER_IN_FLIGHT;
 	}
@@ -1617,7 +1629,7 @@ int API_EXPORTED libusb_cancel_transfer(struct libusb_transfer *transfer)
 		r = LIBUSB_ERROR_NOT_FOUND;
 		goto out;
 	}
-	r = usbi_backend.cancel_transfer(itransfer);
+	r = CTX_BACKEND(ctx).cancel_transfer(itransfer);
 	if (r < 0) {
 		if (r != LIBUSB_ERROR_NOT_FOUND &&
 		    r != LIBUSB_ERROR_NO_DEVICE)
@@ -2154,7 +2166,7 @@ static int handle_event_trigger(struct libusb_context *ctx)
 
 		__for_each_completed_transfer_safe(&completed_transfers, itransfer, tmp) {
 			list_del(&itransfer->completed_list);
-			r = usbi_backend.handle_transfer_completion(itransfer);
+			r = CTX_BACKEND(ctx).handle_transfer_completion(itransfer);
 			if (r) {
 				usbi_err(ctx, "backend handle_transfer_completion failed with error %d", r);
 				break;
@@ -2280,7 +2292,7 @@ static int handle_events(struct libusb_context *ctx, struct timeval *tv)
 	if (!reported_events.num_ready)
 		goto done;
 
-	r = usbi_backend.handle_events(ctx, reported_events.event_data,
+	r = CTX_BACKEND(ctx).handle_events(ctx, reported_events.event_data,
 		reported_events.event_data_count, reported_events.num_ready);
 	if (r)
 		usbi_err(ctx, "backend handle_events failed with error %d", r);
@@ -2857,7 +2869,7 @@ void usbi_handle_disconnect(struct libusb_device_handle *dev_handle)
 			 (void *) transfer_to_cancel);
 
 		usbi_mutex_lock(&to_cancel->lock);
-		usbi_backend.clear_transfer_priv(to_cancel);
+		CTX_BACKEND(ctx).clear_transfer_priv(to_cancel);
 		usbi_mutex_unlock(&to_cancel->lock);
 		usbi_handle_transfer_completion(to_cancel, LIBUSB_TRANSFER_NO_DEVICE);
 	}
