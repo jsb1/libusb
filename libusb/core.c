@@ -2477,7 +2477,10 @@ int API_EXPORTED libusb_init_context(libusb_context **ctx, const struct libusb_i
 		usbi_mutex_static_unlock(&default_context_lock);
 		return LIBUSB_ERROR_NO_MEM;
 	}
+
+#ifdef ENABLE_USBIP
 	_ctx->usbi_ctx_backend=use_backend;
+#endif
 
 #if defined(ENABLE_LOGGING) && !defined(ENABLE_DEBUG_LOGGING)
 	_ctx->debug = LIBUSB_LOG_LEVEL_NONE;
