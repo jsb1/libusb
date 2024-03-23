@@ -1549,7 +1549,7 @@ enum libusb_option {
 	/* Address And Port for USBIP Access
 	 *
 	 */
-	LIBUSB_OPTION_USBIP_ADDRESS = 4,
+	LIBUSB_OPTION_USBIP_HOST = 4,
 
 	LIBUSB_OPTION_MAX = 5
 };
@@ -1580,7 +1580,7 @@ struct libusb_init_option {
     int ival;
     libusb_log_cb log_cbval;
     /** usbip settings */
-    char *ip_address;
+    char *ip_host;
   } value;
 };
 

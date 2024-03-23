@@ -2349,7 +2349,7 @@ int API_EXPORTEDV libusb_set_option(libusb_context *ctx,
 			break;
 
 			/* Handle all backend-specific options here */
-		case LIBUSB_OPTION_USBIP_ADDRESS:
+		case LIBUSB_OPTION_USBIP_HOST:
 		case LIBUSB_OPTION_USE_USBDK:
 		case LIBUSB_OPTION_NO_DEVICE_DISCOVERY:
 			if (CTX_BACKEND(ctx).set_option) {
@@ -2428,19 +2428,19 @@ int API_EXPORTED libusb_init_context(libusb_context **ctx, const struct libusb_i
 	struct libusb_context *_ctx;
 	int r;
 	const struct usbi_os_backend *use_backend;
-	char *env_address = NULL;
+	char *env_host = NULL;
 
 #ifdef ENABLE_USBIP
 	int is_usbip=0;
 
 	for(int i=0; i<num_options; i++)
-		if(options[i].option == LIBUSB_OPTION_USBIP_ADDRESS) {
+		if(options[i].option == LIBUSB_OPTION_USBIP_HOST) {
 			is_usbip = 1;
 			break;
 		}
 	if(!is_usbip) {
-		env_address = getenv("LIBUSB_USBIP_ADDRESS");
-		if(env_address != NULL) {
+		env_host = getenv("LIBUSB_USBIP_HOST");
+		if(env_host != NULL) {
 			is_usbip = 1;
 		}
 	}
@@ -2477,10 +2477,7 @@ int API_EXPORTED libusb_init_context(libusb_context **ctx, const struct libusb_i
 		usbi_mutex_static_unlock(&default_context_lock);
 		return LIBUSB_ERROR_NO_MEM;
 	}
-
-#ifdef ENABLE_USBIP
 	_ctx->usbi_ctx_backend=use_backend;
-#endif
 
 #if defined(ENABLE_LOGGING) && !defined(ENABLE_DEBUG_LOGGING)
 	_ctx->debug = LIBUSB_LOG_LEVEL_NONE;
@@ -2518,6 +2515,9 @@ int API_EXPORTED libusb_init_context(libusb_context **ctx, const struct libusb_i
 			r = libusb_set_option(_ctx, options[i].option, options[i].value.log_cbval);
 			break;
 
+		case LIBUSB_OPTION_USBIP_HOST:
+			r = libusb_set_option(_ctx, options[i].option, options[i].value.ip_host);
+			break;
 		case LIBUSB_OPTION_LOG_LEVEL:
 		case LIBUSB_OPTION_USE_USBDK:
 		case LIBUSB_OPTION_NO_DEVICE_DISCOVERY:
@@ -2529,8 +2529,8 @@ int API_EXPORTED libusb_init_context(libusb_context **ctx, const struct libusb_i
 			goto err_free_ctx;
 	}
 	/* apply additional option from environment */
-	if(env_address) {
-		r = libusb_set_option(_ctx, LIBUSB_OPTION_USBIP_ADDRESS, env_address);
+	if(env_host) {
+		r = libusb_set_option(_ctx, LIBUSB_OPTION_USBIP_HOST, env_host);
 		if (LIBUSB_SUCCESS != r)
 			goto err_free_ctx;
 	}

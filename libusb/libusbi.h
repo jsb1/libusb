@@ -368,10 +368,6 @@ void usbi_log(struct libusb_context *ctx, enum libusb_log_level level,
 #define IS_XFEROUT(xfer)	(!IS_XFERIN(xfer))
 
 struct libusb_context {
-#ifdef ENABLE_USBIP
-	const struct usbi_os_backend *usbi_ctx_backend;
-#endif
-
 #if defined(ENABLE_LOGGING) && !defined(ENABLE_DEBUG_LOGGING)
 	enum libusb_log_level debug;
 	int debug_fixed;
@@ -464,6 +460,10 @@ struct libusb_context {
 	struct list_head completed_transfers;
 
 	struct list_head list;
+
+#ifdef ENABLE_USBIP
+	const struct usbi_os_backend *usbi_ctx_backend;
+#endif
 };
 
 extern struct libusb_context *usbi_default_context;
