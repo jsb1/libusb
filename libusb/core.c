@@ -1300,8 +1300,8 @@ void API_EXPORTED libusb_unref_device(libusb_device *dev)
 
 		libusb_unref_device(dev->parent_dev);
 
-		if (CTX_BACKEND(DEVICE_CTX(dev)).destroy_device)
-			CTX_BACKEND(DEVICE_CTX(dev)).destroy_device(dev);
+		if (DEVICE_BACKEND(dev).destroy_device)
+			DEVICE_BACKEND(dev).destroy_device(dev);
 
 		if (!libusb_has_capability_context(DEVICE_CTX(dev), LIBUSB_CAP_HAS_HOTPLUG)) {
 			/* backend does not support hotplug */
@@ -1740,7 +1740,7 @@ int API_EXPORTED libusb_set_configuration(libusb_device_handle *dev_handle,
 	usbi_dbg(HANDLE_CTX(dev_handle), "configuration %d", configuration);
 	if (configuration < -1 || configuration > (int)UINT8_MAX)
 		return LIBUSB_ERROR_INVALID_PARAM;
-	return CTX_BACKEND(DEVICE_CTX(dev_handle->dev)).set_configuration(dev_handle, configuration);
+	return HANDLE_BACKEND(dev_handle).set_configuration(dev_handle, configuration);
 }
 
 /** \ingroup libusb_dev
@@ -2404,6 +2404,11 @@ int API_EXPORTED libusb_init(libusb_context **ctx)
 {
 	return libusb_init_context(ctx, NULL, 0);
 }
+
+/** TODO: remove when usbip implemented */
+#ifdef ENABLE_USBIP
+const struct usbi_os_backend usbip_usbi_backend = {};
+#endif
 
 /** \ingroup libusb_lib
  * Initialize libusb. This function must be called before calling any other

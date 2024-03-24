@@ -112,7 +112,7 @@ int API_EXPORTED libusb_control_transfer(libusb_device_handle *dev_handle,
 	if (usbi_handling_events(ctx))
 		return LIBUSB_ERROR_BUSY;
 
-	transfer = libusb_alloc_transfer_context(ctx, 0);
+	transfer = libusb_alloc_transfer(0);
 	if (!transfer)
 		return LIBUSB_ERROR_NO_MEM;
 
@@ -184,13 +184,14 @@ static int do_sync_bulk_transfer(struct libusb_device_handle *dev_handle,
 	if (usbi_handling_events(ctx))
 		return LIBUSB_ERROR_BUSY;
 
-	transfer = libusb_alloc_transfer_context(ctx, 0);
+	transfer = libusb_alloc_transfer(0);
 	if (!transfer)
 		return LIBUSB_ERROR_NO_MEM;
 
 	libusb_fill_bulk_transfer(transfer, dev_handle, endpoint, buffer, length,
 		sync_transfer_cb, &completed, timeout);
 	transfer->type = type;
+
 
 	r = libusb_submit_transfer(transfer);
 	if (r < 0) {

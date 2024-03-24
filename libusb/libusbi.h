@@ -343,14 +343,11 @@ void usbi_log(struct libusb_context *ctx, enum libusb_log_level level,
  * Using CTX_BACKEND_UNSAFE() everywhere
  * does not increase code size. Needs careful optimization ...
   */
-#define CTX_BACKEND_SAFE(_ctx_) (usbi_get_context(_ctx_) ? \
-		*usbi_get_context(_ctx_)->usbi_ctx_backend : usbi_backend)
-#define CTX_BACKEND_NEARLY_SAFE(_ctx_) ((_ctx_) ? \
-		*(_ctx_)->usbi_ctx_backend : usbi_backend)
+#define CTX_BACKEND_SAFE(_ctx_) (*usbi_get_backend(_ctx_))
 #define CTX_BACKEND_UNSAFE(_ctx_) (*(_ctx_)->usbi_ctx_backend)
 #define CTX_BACKEND(_ctx_) CTX_BACKEND_SAFE(_ctx_)
-/* a device should have an context */
-#define DEVICE_BACKEND(_dev_) CTX_BACKEND_UNSAFE(DEVICE_CTX(_dev_))
+/* a device should have an context - needs further investigation */
+#define DEVICE_BACKEND(_dev_) CTX_BACKEND_SAFE(DEVICE_CTX(_dev_))
 /* a handle should have an context */
 #define HANDLE_BACKEND(_handle_) CTX_BACKEND_UNSAFE(HANDLE_CTX(_handle_))
 /* a no idea what users are doing when allocating a transfer */
@@ -1503,8 +1500,41 @@ struct usbi_os_backend {
 };
 
 extern const struct usbi_os_backend usbi_backend;
+
 #ifdef ENABLE_USBIP
 extern const struct usbi_os_backend usbip_usbi_backend;
+static inline const struct usbi_os_backend *usbi_get_backend(struct libusb_context *ctx)
+{
+
+	if(ctx)
+		return ctx->usbi_ctx_backend;
+
+	if (!ctx) {
+		ctx = usbi_default_context;
+	}
+	if (!ctx) {
+		ctx = usbi_fallback_context;
+	}
+	if(ctx)
+		return ctx->usbi_ctx_backend;
+/** TODO: Mock test failing
+	static int warned = 0;
+
+	ctx = usbi_get_context(ctx);
+
+	if(!warned) {
+		usbi_err(ctx, "API misuse! Context not found.");
+	}
+
+	if(ctx)
+		return ctx->usbi_ctx_backend;
+
+	if(!warned) {
+		usbi_err(ctx, "API misuse! Backend not found.");
+	}
+*/
+	return &usbi_backend;
+}
 #endif
 
 #define for_each_context(c) \

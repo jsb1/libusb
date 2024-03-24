@@ -1262,14 +1262,6 @@ static void calculate_timeout(struct usbi_transfer *itransfer)
 	}
 }
 
-/** Depends on default context.
- * Use libusb_alloc_transfer_ctx when working with multiple contexts!
- **/
-DEFAULT_VISIBILITY
-struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer(int iso_packets) {
-	return libusb_alloc_transfer_context(NULL, iso_packets);
-}
-
 /** \ingroup libusb_asyncio
  * Allocate a libusb transfer with a specified number of isochronous packet
  * descriptors. The returned transfer is pre-initialized for you. When the new
@@ -1294,18 +1286,21 @@ struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer(int iso_packets) {
  * \returns a newly allocated transfer, or NULL on error
  */
 DEFAULT_VISIBILITY
-struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer_context(
-		struct libusb_context *ctx,
+struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer(
 	int iso_packets)
 {
 	assert(iso_packets >= 0);
 	if (iso_packets < 0)
 		return NULL;
-	ctx = usbi_get_context(ctx);
-	if(ctx==NULL)
-		return NULL;
 
-	size_t priv_size = PTR_ALIGN(CTX_BACKEND(ctx).transfer_priv_size);
+	size_t priv_size = PTR_ALIGN(usbi_backend.transfer_priv_size);
+#ifdef ENABLE_USBIP
+	/** TODO: This is a dirty hack */
+	size_t usbip_priv_size = PTR_ALIGN(usbip_usbi_backend.transfer_priv_size);
+	if(usbip_priv_size > priv_size)
+		priv_size = usbip_priv_size;
+#endif
+
 	size_t usbi_transfer_size = PTR_ALIGN(sizeof(struct usbi_transfer));
 	size_t libusb_transfer_size = PTR_ALIGN(sizeof(struct libusb_transfer));
 	size_t iso_packets_size = sizeof(struct libusb_iso_packet_descriptor) * (size_t)iso_packets;

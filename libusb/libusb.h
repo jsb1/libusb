@@ -1784,7 +1784,6 @@ static inline void libusb_fill_control_setup(unsigned char *buffer,
 }
 
 struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer(int iso_packets);
-struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer_context(struct libusb_context *ctx, int iso_packets);
 int LIBUSB_CALL libusb_submit_transfer(struct libusb_transfer *transfer);
 int LIBUSB_CALL libusb_cancel_transfer(struct libusb_transfer *transfer);
 void LIBUSB_CALL libusb_free_transfer(struct libusb_transfer *transfer);
