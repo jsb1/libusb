@@ -608,6 +608,10 @@ static void darwin_devices_attached (void *ptr, io_iterator_t add_devices) {
 
     /* add this device to each active context's device list */
     for_each_context(ctx) {
+#ifdef ENABLE_USBIP
+      if(ctx->usbi_ctx_backend != &usbi_backend)
+      	continue;
+#endif
       process_new_device (ctx, cached_device, old_session_id);
     }
 
@@ -676,6 +680,10 @@ static void darwin_devices_detached (void *ptr, io_iterator_t rem_devices) {
     }
 
     for_each_context(ctx) {
+#ifdef ENABLE_USBIP
+      if(ctx->usbi_ctx_backend != &usbi_backend)
+      	continue;
+#endif
       usbi_dbg (ctx, "notifying context %p of device disconnect", ctx);
 
       dev = usbi_get_device_by_session_id(ctx, (unsigned long) session);

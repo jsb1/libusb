@@ -1149,6 +1149,11 @@ void linux_hotplug_enumerate(uint8_t busnum, uint8_t devaddr, const char *sys_na
 
 	usbi_mutex_static_lock(&active_contexts_lock);
 	for_each_context(ctx) {
+		/** TODO: fix usbip in all os */
+#ifdef ENABLE_USBIP
+		if(ctx->usbi_ctx_backend != &usbi_backend)
+			continue;
+#endif
 		linux_enumerate_device(ctx, busnum, devaddr, sys_name);
 	}
 	usbi_mutex_static_unlock(&active_contexts_lock);
@@ -1162,6 +1167,11 @@ void linux_device_disconnected(uint8_t busnum, uint8_t devaddr)
 
 	usbi_mutex_static_lock(&active_contexts_lock);
 	for_each_context(ctx) {
+		/** TODO: fix usbip in all os */
+#ifdef ENABLE_USBIP
+		if(ctx->usbi_ctx_backend != &usbi_backend)
+			continue;
+#endif
 		dev = usbi_get_device_by_session_id(ctx, session_id);
 		if (dev) {
 			usbi_disconnect_device(dev);
